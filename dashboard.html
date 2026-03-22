@@ -279,7 +279,9 @@ async function loadResults() {
     try {
       res = await fetch('/api/results');
     } catch {
-      res = await fetch('results.json');
+      // GitHub Pages serves from /options-matrix-scanner/ base path
+      const base = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+      res = await fetch(base + '/results.json');
     }
     const data = await res.json();
     if (data.no_results || data.error) {
