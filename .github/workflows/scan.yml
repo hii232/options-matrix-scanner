@@ -23,6 +23,8 @@ jobs:
       - name: Run Options Matrix Scan
         run: node scanner.js -v -o docs/results.json
         timeout-minutes: 5
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Commit and push results
         run: |
