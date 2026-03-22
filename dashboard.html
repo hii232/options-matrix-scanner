@@ -278,8 +278,8 @@ async function loadResults() {
     let res;
     try {
       res = await fetch('/api/results');
+      if (!res.ok) throw new Error('not local');
     } catch {
-      // GitHub Pages serves from /options-matrix-scanner/ base path
       const base = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
       res = await fetch(base + '/results.json');
     }
