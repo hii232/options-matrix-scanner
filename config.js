@@ -22,15 +22,17 @@ const ACCOUNT = {
 ACCOUNT.maxDeploy = ACCOUNT.total * ACCOUNT.maxDeployPct;
 
 const TIER1 = {
-  beatRunRateMin: 0.625,
+  beatRunRateMin: 0.50,
   beatRunMinCount: 5,
-  avgActualMoveMin: 8.0,
-  bidAskMax: 1.50,
+  avgActualMoveMin: 5.0,
+  bidAskBase: 1.50,        // for $50 stocks
+  bidAskPctOfPrice: 0.03,  // 3% of stock price = max spread
   priceMin: 50,
   priceMax: 600,
-  vixMax: 25,
-  vixCaution: 30,
+  vixMax: 30,
+  vixCaution: 35,
   fxMinProfit: 0.05,
+  minOpenInterest: 100,
 };
 
 const TIER2 = {
@@ -64,32 +66,74 @@ const DUMP_DETECTOR = {
   confidencePenalty: 15,
 };
 
-// Diversified scan universe — ~120 tickers across sectors
+// Diversified scan universe — ~300 tickers across sectors
 const SCAN_UNIVERSE = [
-  // Tech / Software
-  "AAPL", "MSFT", "CRM", "SNOW", "PANW", "CRWD", "DDOG", "SHOP", "WDAY",
-  "NOW", "SNPS", "CDNS", "ANSS", "FTNT", "TEAM", "VEEV", "TTD", "ZM",
-  "BILL", "HUBS", "MNDY", "DOCU", "OKTA", "TWLO", "SQ", "PYPL",
+  // Tech / Software — Mega Cap
+  "AAPL", "MSFT", "AMZN", "CRM", "NOW", "INTU",
+  // Tech / Software — Large Cap
+  "SNOW", "PANW", "CRWD", "DDOG", "SHOP", "WDAY", "SNPS", "CDNS", "ANSS",
+  "FTNT", "TEAM", "VEEV", "TTD", "ZM", "BILL", "HUBS", "MNDY", "DOCU",
+  "OKTA", "TWLO", "SQ", "PYPL", "DASH", "UBER", "LYFT", "ABNB", "PINS",
+  "SNAP", "U", "RBLX", "PATH", "MDB", "ESTC", "CFLT", "GTLB", "IOT",
+  "SAMSN", "FIVN", "GLOB", "TOST", "BRZE", "PCOR", "CWAN",
+  // Tech / Software — Mid Cap Growth
+  "APPF", "ALTR", "FRSH", "JAMF", "QLYS", "TENB", "RPD", "CYBR", "VRNS",
+  "SAIL", "SMAR", "DOCN", "DOMO", "ZUOR", "NCNO",
   // Semiconductors
   "AVGO", "MRVL", "QCOM", "TXN", "LRCX", "KLAC", "AMAT", "ON", "MPWR",
+  "SWKS", "QRVO", "MCHP", "NXPI", "ENTG", "MKSI", "ACLS", "FORM", "CRUS",
+  "DIOD", "SLAB", "SITM", "RMBS", "SMTC", "WOLF",
   // Consumer / Retail
   "COST", "WMT", "TGT", "NKE", "SBUX", "MCD", "DPZ", "CMG", "DECK",
-  "ULTA", "FIVE", "DG", "DLTR", "ROST", "TJX", "HD", "LOW",
-  // Healthcare / Biotech
-  "UNH", "LLY", "ISRG", "DXCM", "ALGN", "INTU", "VRTX", "REGN", "ABBV",
-  "AMGN", "GILD", "BMY", "BIIB", "MRNA",
-  // Finance
-  "GS", "MS", "JPM", "V", "MA", "AXP", "COF", "COIN",
+  "ULTA", "FIVE", "DG", "DLTR", "ROST", "TJX", "HD", "LOW", "BURL",
+  "WSM", "RH", "LULU", "ETSY", "W", "CHWY", "CVNA", "CARG", "KMX",
+  "AZO", "ORLY", "AAP", "GPC", "TSCO", "POOL", "WING", "SHAK", "CAVA",
+  "ELF", "ONON", "BIRK",
+  // Healthcare / Biotech — Large Cap
+  "UNH", "LLY", "ISRG", "DXCM", "ALGN", "VRTX", "REGN", "ABBV",
+  "AMGN", "GILD", "BMY", "BIIB", "MRNA", "ELV", "CI", "HUM", "CNC",
+  "MOH", "HCA", "THC", "SYK", "BSX", "EW", "ZBH", "MDT", "ABT",
+  // Healthcare / Biotech — Mid Cap
+  "INSP", "PODD", "TNDM", "HALO", "PCVX", "IONS", "SRPT", "BMRN",
+  "EXAS", "NTRA", "GH", "TWST", "CERT", "RGEN", "BIO", "TECH",
+  // Finance — Banks & Payments
+  "GS", "MS", "JPM", "V", "MA", "AXP", "COF", "COIN", "BAC", "WFC",
+  "C", "SCHW", "BLK", "KKR", "APO", "ARES", "OWL", "MKTX", "CBOE",
+  "CME", "ICE", "NDAQ", "FIS", "FISV", "GPN", "SYF", "DFS", "ALLY",
+  "SOFI", "AFRM", "HOOD", "LPLA",
+  // Finance — Insurance & Fintech
+  "PGR", "ALL", "TRV", "MET", "AIG", "KNSL", "RLI",
   // Industrial / Defense
   "LMT", "RTX", "GD", "NOC", "BA", "CAT", "DE", "HON", "GE",
-  // Energy
-  "CVX", "COP", "SLB", "EOG", "DVN", "OXY", "PSX",
-  // Nuclear / Clean Energy
-  "CEG", "VST", "NRG", "FSLR",
+  "MMM", "ETN", "ROK", "EMR", "AME", "ITW", "PH", "IR", "DOV",
+  "FAST", "GNRC", "TT", "CARR", "OTIS", "AXON", "TDG", "HWM", "HEI",
+  "LDOS", "SAIC", "CACI", "BAH", "KBR",
+  // Energy — Oil & Gas
+  "CVX", "COP", "SLB", "EOG", "DVN", "OXY", "PSX", "VLO", "MPC",
+  "PXD", "FANG", "HES", "APA", "OVV", "CTRA", "MRO", "AR",
+  // Energy — Nuclear / Clean
+  "CEG", "VST", "NRG", "FSLR", "ENPH", "SEDG", "RUN", "NOVA",
+  // Materials & Mining
+  "FCX", "NEM", "AEM", "GOLD", "WPM", "RGLD", "NUE", "STLD",
+  "CLF", "X", "AA", "CENX", "MP", "ALB", "SQM", "LAC",
   // Communication / Media
-  "DIS", "CMCSA", "ROKU", "SPOT",
+  "DIS", "CMCSA", "ROKU", "SPOT", "PARA", "WBD", "LYV", "IMAX",
+  "NWSA", "NYT",
   // Enterprise / Cloud
-  "AMZN", "IBM", "HPE", "DELL",
+  "IBM", "HPE", "DELL", "NTAP", "PSTG", "SMCI", "ANET", "CSCO",
+  "JNPR", "FFIV", "AKAM", "LLNW",
+  // Transportation / Logistics
+  "FDX", "UPS", "JBHT", "XPO", "ODFL", "SAIA", "DAL", "UAL",
+  "AAL", "LUV", "ALK", "SAVE",
+  // REITs — Data Centers / Specialty
+  "EQIX", "DLR", "AMT", "CCI", "PSA", "EXR", "INVH", "VTR",
+  // Food & Beverage
+  "PEP", "KO", "MNST", "CELH", "SAM", "STZ", "TAP", "BF.B",
+  // Pharma
+  "PFE", "MRK", "JNJ", "AZN", "NVO", "SNY",
+  // Misc High-Growth / Speculative
+  "RKLB", "IONQ", "RGTI", "QUBT", "ASTS", "LUNR", "RDW", "ASTR",
+  "JOBY", "LILM", "ACHR",
 ];
 
 module.exports = {

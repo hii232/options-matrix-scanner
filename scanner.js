@@ -18,6 +18,7 @@ const { KILL_LIST, ACCOUNT, TIER1, RULES, SCAN_UNIVERSE } = require("./config");
 const df = require("./data-fetcher");
 const matrix = require("./matrix");
 const ai = require("./ai-layer");
+const perf = require("./performance-tracker");
 
 function log(msg) { console.error(`[SCAN] ${msg}`); }
 
@@ -218,7 +219,13 @@ async function runFullScan(verbose = false) {
           // Adjust confidence based on AI
           const oldConf = s.confidence;
           s.confidence = Math.max(0, Math.min(100, s.confidence + (a.confidence_adjustment || 0)));
-          s.direction = s.confidence >= RULES.minConfidence ? "CALL" : "NONE";
+          // AI can flip direction if sentiment is strongly opposite
+          if (a.sentiment_score != null && a.sentiment_score < -50 && s.direction === "CALL") {
+            s.direction = "PUT";
+          } else if (a.sentiment_score != null && a.sentiment_score > 50 && s.direction === "PUT") {
+            s.direction = "CALL";
+          }
+          if (s.confidence < RULES.minConfidence) s.direction = "NONE";
           s.confidenceTradeable = s.confidence >= RULES.minConfidence;
 
           // AI kill override
@@ -256,10 +263,27 @@ async function runFullScan(verbose = false) {
     log("\n[4/5] AI layer: No API key — running math-only mode");
   }
 
-  // Step 5: Select top trade
-  log(`\n[5/5] Selecting top trade from ${survivors.length} survivors...`);
+  // Step 5: Performance tracking
+  log(`\n[5/6] Tracking performance of past recommendations...`);
+  for (const s of survivors) {
+    try { perf.logRecommendation(s); } catch (e) { log(`  Perf log error: ${e.message}`); }
+  }
+  // Check outcomes of past trades
+  let perfSummary = null;
+  try {
+    perfSummary = await perf.checkOutcomes(async (ticker) => {
+      const q = await df.getStockInfo(ticker);
+      return q?.currentPrice || null;
+    });
+    if (perfSummary.scored > 0) {
+      log(`  Performance: ${perfSummary.win_rate} win rate, ${perfSummary.avg_return} avg return (${perfSummary.scored} scored)`);
+    }
+  } catch (e) { log(`  Perf check error: ${e.message}`); }
 
-  const output = buildOutput(scanDate, effectiveVix, vixGate, macro, tier1Kills, survivors, null, marketBrief);
+  // Step 6: Select top trade
+  log(`\n[6/6] Selecting top trade from ${survivors.length} survivors...`);
+
+  const output = buildOutput(scanDate, effectiveVix, vixGate, macro, tier1Kills, survivors, null, marketBrief, perfSummary);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   log(`\nScan complete in ${elapsed}s`);
@@ -278,7 +302,7 @@ async function runFullScan(verbose = false) {
   return output;
 }
 
-function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTradeReason = null, marketBrief = null) {
+function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTradeReason = null, marketBrief = null, perfSummary = null) {
   // Sort by confidence then tier2 score
   survivors.sort((a, b) => {
     if (b.confidence !== a.confidence) return b.confidence - a.confidence;
@@ -392,6 +416,7 @@ function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTra
     top_trade: topTrade,
     top_trade_full_thesis: topThesis,
     no_trade_reason: noTradeReason,
+    performance: perfSummary || null,
   };
 }
 

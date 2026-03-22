@@ -29,6 +29,16 @@ app.get("/api/results", (req, res) => {
   }
 });
 
+// API: performance tracker
+app.get("/api/performance", (req, res) => {
+  try {
+    const perf = require("./performance-tracker");
+    res.json(perf.getPerformanceLog());
+  } catch (e) {
+    res.json({ trades: [], summary: {}, error: e.message });
+  }
+});
+
 // API: trigger a new scan
 app.get("/api/scan", async (req, res) => {
   res.json({ status: "started", message: "Scan started. Refresh in ~90 seconds." });

@@ -17,10 +17,11 @@ function runTier1(stockInfo, postMoves, optionsData, vix) {
   const checks = [
     ["beat_run", t1BeatRunRate(postMoves)],
     ["avg_move", t1AvgActualMove(postMoves)],
-    ["spread_ok", t1BidAskSpread(optionsData)],
+    ["spread_ok", t1BidAskSpread(optionsData, stockInfo)],
     ["price_ok", t1PriceRange(stockInfo)],
     ["vix_ok", t1VixGate(vix)],
     ["fx_ok", t1FxAdjustedProfit(postMoves)],
+    ["oi_ok", t1OpenInterest(optionsData)],
   ];
 
   for (const [name, check] of checks) {
@@ -43,12 +44,12 @@ function t1BeatRunRate(postMoves) {
   const total = Math.min(postMoves.length, 8);
   const beatAndRan = postMoves.slice(0, 8).filter((m) => m.beatAndRan).length;
   const rate = beatAndRan / total;
-  // Scale min count to available data: require 63% of however many quarters we have
   const scaledMinCount = Math.ceil(total * TIER1.beatRunRateMin);
   const passed = beatAndRan >= scaledMinCount && rate >= TIER1.beatRunRateMin;
+  const threshPct = (TIER1.beatRunRateMin * 100).toFixed(0);
   return {
     passed,
-    reason: `${beatAndRan}/${total} (${(rate * 100).toFixed(0)}%)${passed ? "" : " — below 63% threshold"}`,
+    reason: `${beatAndRan}/${total} (${(rate * 100).toFixed(0)}%)${passed ? "" : ` — below ${threshPct}% threshold`}`,
     detail: `${beatAndRan}/${total} (${(rate * 100).toFixed(0)}%) — ${passed ? "PASS" : "FAIL"}`,
     value: `${beatAndRan}/${total}`,
     rate,
@@ -71,22 +72,52 @@ function t1AvgActualMove(postMoves) {
   };
 }
 
-function t1BidAskSpread(optionsData) {
+function t1BidAskSpread(optionsData, stockInfo) {
   if (!optionsData) {
     return { passed: false, reason: "No options data", detail: "N/A — FAIL", value: "N/A" };
   }
   const spread = optionsData.bidAskSpread;
   if (spread == null) {
-    // If we can't determine spread, give benefit of doubt for liquid large-caps
     return { passed: true, reason: "Spread undetermined — PASS (default)", detail: "N/A — PASS", value: "N/A" };
   }
-  const passed = spread < TIER1.bidAskMax;
+  // Scale max spread by stock price: 3% of price, minimum $1.50
+  const price = stockInfo?.currentPrice || 100;
+  const maxSpread = Math.max(TIER1.bidAskBase, price * TIER1.bidAskPctOfPrice);
+  const passed = spread <= maxSpread;
   return {
     passed,
-    reason: `$${spread.toFixed(2)}${passed ? "" : ` — exceeds $${TIER1.bidAskMax}`}`,
-    detail: `$${spread.toFixed(2)} — ${passed ? "PASS" : "FAIL"}`,
+    reason: `$${spread.toFixed(2)}${passed ? "" : ` — exceeds $${maxSpread.toFixed(2)} (${(TIER1.bidAskPctOfPrice * 100).toFixed(0)}% of $${price.toFixed(0)})`}`,
+    detail: `$${spread.toFixed(2)} / max $${maxSpread.toFixed(2)} — ${passed ? "PASS" : "FAIL"}`,
     value: `$${spread.toFixed(2)}`,
     spread,
+  };
+}
+
+function t1OpenInterest(optionsData) {
+  if (!optionsData) {
+    return { passed: false, reason: "No options data", detail: "N/A — FAIL", value: "N/A" };
+  }
+  const calls = optionsData.calls || [];
+  const puts = optionsData.puts || [];
+  if (!calls.length && !puts.length) {
+    return { passed: false, reason: "No option chains available", detail: "N/A — FAIL", value: "0" };
+  }
+  // Check max OI across ATM-ish strikes
+  const price = optionsData.currentPrice || 0;
+  const nearCalls = calls.filter(c => Math.abs(c.strike - price) / price < 0.15);
+  const nearPuts = puts.filter(p => Math.abs(p.strike - price) / price < 0.15);
+  const maxOI = Math.max(
+    ...nearCalls.map(c => c.openInterest || 0),
+    ...nearPuts.map(p => p.openInterest || 0),
+    0
+  );
+  const passed = maxOI >= TIER1.minOpenInterest;
+  return {
+    passed,
+    reason: `Max OI ${maxOI}${passed ? "" : ` — below ${TIER1.minOpenInterest} minimum`}`,
+    detail: `OI ${maxOI} — ${passed ? "PASS" : "FAIL"}`,
+    value: `${maxOI}`,
+    maxOI,
   };
 }
 
@@ -122,12 +153,15 @@ function t1FxAdjustedProfit(postMoves) {
   }
   const moves = postMoves.slice(0, 8).map((m) => m.absMovePct);
   const avg = moves.reduce((a, b) => a + b, 0) / moves.length;
-  const estimatedOptionGain = avg * 0.4 * 2.0;
+  // OTM options typically gain 2-4x the stock move percentage.
+  // Conservative estimate: 2.5x leverage on the underlying move.
+  const estimatedOptionGain = avg * 2.5;
   const fxAdjusted = estimatedOptionGain - (ACCOUNT.fxDragRoundTrip * 100);
+  const threshPct = (TIER1.fxMinProfit * 100).toFixed(0);
   const passed = fxAdjusted > TIER1.fxMinProfit * 100;
   return {
     passed,
-    reason: `Estimated ${fxAdjusted.toFixed(1)}% after FX${passed ? "" : " — below 5% threshold"}`,
+    reason: `Estimated ${fxAdjusted.toFixed(1)}% after FX${passed ? "" : ` — below ${threshPct}% threshold`}`,
     detail: `${fxAdjusted.toFixed(1)}% post-FX — ${passed ? "PASS" : "FAIL"}`,
     value: `${fxAdjusted.toFixed(1)}%`,
   };
@@ -203,8 +237,15 @@ function runTier2(stockInfo, optionsData, ivRank, earningsInfo, postMoves, reven
   };
   if (!macroPass) fails.push("recession_proof");
 
-  // T2.8 Insider activity (default neutral = pass)
-  details.insider = { passed: true, detail: "neutral — PASS", value: "neutral" };
+  // T2.8 Insider activity — check insider ownership %
+  const insiderPct = stockInfo?.insiderPct;
+  const insiderPass = insiderPct == null || (insiderPct > 0.01 && insiderPct < 0.40);
+  details.insider = {
+    passed: insiderPass,
+    detail: insiderPct != null ? `${(insiderPct * 100).toFixed(1)}% — ${insiderPass ? "PASS" : "FAIL"}` : "N/A — PASS",
+    value: insiderPct != null ? `${(insiderPct * 100).toFixed(1)}%` : "N/A",
+  };
+  if (!insiderPass) fails.push("insider");
 
   // T2.9 Revenue trend
   const revResult = assessRevenueTrend(revenueTrend);
@@ -316,87 +357,144 @@ function runDumpDetector(stockInfo, ivRank, postMoves, priceChange6mo) {
 // ══════════════════════════════════════════════════════════
 
 function calculateConfidence(stockInfo, postMoves, ivRank, tier2Result, dumpResult, earningsInfo) {
-  let score = 50;
+  let bullScore = 50;
+  let bearScore = 50;
   const breakdown = {};
 
-  // a) Beat-run history (+20 max)
+  // a) Beat-run history (+20 max for bull, inverted for bear)
   if (postMoves?.length) {
-    const beatRuns = postMoves.slice(0, 8).filter((m) => m.beatAndRan).length;
     const total = Math.min(postMoves.length, 8);
+    const recent = postMoves.slice(0, total);
+    const beatRuns = recent.filter((m) => m.beatAndRan).length;
     const rate = total > 0 ? beatRuns / total : 0;
-    const contribution = rate * 20;
-    score += contribution;
-    breakdown.beat_run_history = `${beatRuns}/${total} — +${contribution.toFixed(0)} points`;
+    const bullContrib = rate * 20;
+    bullScore += bullContrib;
+    // Bear: stocks that beat but DROP are put candidates
+    const beatAndDumped = recent.filter((m) => m.beat && m.movePct < 0).length;
+    const dumpRate = total > 0 ? beatAndDumped / total : 0;
+    const bearContrib = dumpRate * 25;
+    bearScore += bearContrib;
+    breakdown.beat_run_history = `${beatRuns}/${total} beat+ran, ${beatAndDumped}/${total} beat+dumped`;
   } else {
     breakdown.beat_run_history = "No data — +0";
   }
 
   // b) IV environment (+10 max)
   if (ivRank != null) {
-    if (ivRank < 25) { score += 10; breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — cheap, +10`; }
-    else if (ivRank < 35) { score += 7; breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — favorable, +7`; }
-    else if (ivRank < 50) { score += 3; breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — fair, +3`; }
-    else { score -= 5; breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — expensive, -5`; }
+    if (ivRank < 25) {
+      bullScore += 10; bearScore += 10;
+      breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — cheap, +10`;
+    } else if (ivRank < 35) {
+      bullScore += 7; bearScore += 7;
+      breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — favorable, +7`;
+    } else if (ivRank < 50) {
+      bullScore += 3; bearScore += 3;
+      breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — fair, +3`;
+    } else {
+      bullScore -= 5; bearScore -= 5;
+      breakdown.iv_environment = `IV Rank ${ivRank.toFixed(0)}% — expensive, -5`;
+    }
   } else {
     breakdown.iv_environment = "Unknown — +0";
   }
 
-  // c) Analyst consensus (+10 max)
+  // c) Analyst consensus (+10 max bull, inverted for bear)
   const rec = stockInfo?.recommendation;
   const numAnalysts = stockInfo?.numAnalystOpinions || 0;
   if ((rec === "buy" || rec === "strongBuy" || rec === "strong_buy") && numAnalysts >= 10) {
-    score += 8; breakdown.analyst_consensus = `${rec} (${numAnalysts} analysts) — +8`;
+    bullScore += 8;
+    breakdown.analyst_consensus = `${rec} (${numAnalysts} analysts) — bull +8`;
   } else if (rec === "buy" || rec === "strongBuy" || rec === "strong_buy") {
-    score += 5; breakdown.analyst_consensus = `${rec} (${numAnalysts} analysts) — +5`;
+    bullScore += 5;
+    breakdown.analyst_consensus = `${rec} (${numAnalysts} analysts) — bull +5`;
   } else if (rec === "hold") {
     breakdown.analyst_consensus = "Hold — +0";
   } else if (rec === "sell" || rec === "strongSell" || rec === "strong_sell") {
-    score -= 10; breakdown.analyst_consensus = `${rec} — -10`;
+    bullScore -= 10; bearScore += 10;
+    breakdown.analyst_consensus = `${rec} — bear +10`;
   } else {
     breakdown.analyst_consensus = `${rec || "N/A"} — +0`;
   }
 
   // d) Flow signal (+5 max)
   const flow = tier2Result?.details?.flow || {};
-  if (flow.passed) { score += 5; breakdown.flow_signal = "Uncrowded — +5"; }
-  else { breakdown.flow_signal = "Crowded — +0"; }
+  if (flow.passed) { bullScore += 5; breakdown.flow_signal = "Uncrowded — +5"; }
+  else { bearScore += 3; breakdown.flow_signal = "Crowded — bear +3"; }
 
   // e) Macro alignment (+5 max)
   const sector = stockInfo?.sector || "";
   if (["Technology", "Healthcare", "Industrials"].includes(sector)) {
-    score += 5; breakdown.macro_alignment = `${sector} — tailwind +5`;
+    bullScore += 5; breakdown.macro_alignment = `${sector} — tailwind +5`;
   } else if (["Consumer Cyclical", "Real Estate"].includes(sector)) {
-    score -= 3; breakdown.macro_alignment = `${sector} — headwind -3`;
+    bullScore -= 3; bearScore += 5;
+    breakdown.macro_alignment = `${sector} — headwind, bear +5`;
   } else {
-    score += 2; breakdown.macro_alignment = `${sector} — neutral +2`;
+    bullScore += 2; breakdown.macro_alignment = `${sector} — neutral +2`;
   }
 
   // f) Catalyst clarity (+5 max)
   const days = earningsInfo?.daysToEarnings ?? 999;
   if (days >= 14 && days <= 35) {
-    score += 5; breakdown.catalyst_clarity = `Earnings in ${days} days — sweet spot +5`;
+    bullScore += 5; bearScore += 5;
+    breakdown.catalyst_clarity = `Earnings in ${days} days — sweet spot +5`;
   } else if (days <= 45) {
-    score += 3; breakdown.catalyst_clarity = `Earnings in ${days} days — acceptable +3`;
+    bullScore += 3; bearScore += 3;
+    breakdown.catalyst_clarity = `Earnings in ${days} days — acceptable +3`;
   } else {
     breakdown.catalyst_clarity = `Earnings in ${days} days — no near catalyst +0`;
   }
 
-  // g) Dump penalty
+  // g) Dump penalty (hurts bull, helps bear)
   const penalty = dumpResult?.confidencePenalty || 0;
   if (penalty > 0) {
-    score -= penalty;
-    breakdown.dump_risk = `${dumpResult.risk} — -${penalty} points`;
+    bullScore -= penalty;
+    bearScore += Math.round(penalty * 0.5);
+    breakdown.dump_risk = `${dumpResult.risk} — bull -${penalty}, bear +${Math.round(penalty * 0.5)}`;
   } else {
     breakdown.dump_risk = dumpResult?.risk || "none";
   }
 
-  score = Math.max(0, Math.min(100, score));
+  // h) Price trend — 6mo momentum
+  const price = stockInfo?.currentPrice || 0;
+  const low52 = stockInfo?.fiftyTwoWeekLow || price;
+  const high52 = stockInfo?.fiftyTwoWeekHigh || price;
+  if (high52 > low52) {
+    const range = (price - low52) / (high52 - low52);
+    if (range > 0.8) {
+      bearScore += 5; // Near 52w high = overextended
+      breakdown.price_trend = `Near 52w high (${(range * 100).toFixed(0)}%) — bear +5`;
+    } else if (range < 0.3) {
+      bullScore += 5; // Near 52w low = potential value
+      breakdown.price_trend = `Near 52w low (${(range * 100).toFixed(0)}%) — bull +5`;
+    } else {
+      breakdown.price_trend = `Mid-range (${(range * 100).toFixed(0)}%) — neutral`;
+    }
+  }
+
+  bullScore = Math.max(0, Math.min(100, bullScore));
+  bearScore = Math.max(0, Math.min(100, bearScore));
+
+  // Pick the stronger direction
+  let direction, score;
+  if (bullScore >= bearScore && bullScore >= RULES.minConfidence) {
+    direction = "CALL";
+    score = Math.round(bullScore);
+  } else if (bearScore > bullScore && bearScore >= RULES.minConfidence) {
+    direction = "PUT";
+    score = Math.round(bearScore);
+  } else {
+    direction = "NONE";
+    score = Math.round(Math.max(bullScore, bearScore));
+  }
+
+  breakdown.bull_score = Math.round(bullScore);
+  breakdown.bear_score = Math.round(bearScore);
 
   return {
-    score: Math.round(score),
-    direction: score >= RULES.minConfidence ? "CALL" : "NONE",
+    score,
+    direction,
     breakdown,
-    tradeable: score >= RULES.minConfidence,
+    tradeable: direction !== "NONE",
   };
 }
 

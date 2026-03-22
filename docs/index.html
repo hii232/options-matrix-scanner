@@ -277,6 +277,7 @@
 <script>
 async function loadResults() {
   try {
+    // Try local server first, then fall back to static file (GitHub Pages)
     let res;
     const isGitHubPages = window.location.hostname.endsWith('.github.io');
     if (!isGitHubPages) {
@@ -349,7 +350,7 @@ function render(d) {
     <div class="top-trade">
       <h2>
         <span class="ticker">${s.ticker}</span>
-        <span class="badge badge-green">${s.direction}</span>
+        <span class="badge ${s.direction === 'PUT' ? 'badge-red' : 'badge-green'}">${s.direction}</span>
         <span class="badge" style="background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3)">${s.direction_confidence}% Confidence</span>
       </h2>
       <div class="company">${s.company} &mdash; ${s.sector} &mdash; ${s.market_cap}</div>
@@ -379,8 +380,19 @@ function render(d) {
     <div class="section">
       <div class="section-title">Confidence Breakdown</div>
       <div class="card">
+        ${s.confidence_breakdown?.bull_score != null ? `
+        <div style="display:flex;gap:20px;margin-bottom:15px;">
+          <div style="flex:1;text-align:center;padding:10px;border-radius:8px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3)">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px">BULL SCORE</div>
+            <div style="font-size:24px;color:var(--green);font-weight:700">${s.confidence_breakdown.bull_score}</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:10px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3)">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:4px">BEAR SCORE</div>
+            <div style="font-size:24px;color:var(--red);font-weight:700">${s.confidence_breakdown.bear_score}</div>
+          </div>
+        </div>` : ''}
         <div class="breakdown-list">
-          ${Object.entries(s.confidence_breakdown || {}).map(([k, v]) => `
+          ${Object.entries(s.confidence_breakdown || {}).filter(([k]) => k !== 'bull_score' && k !== 'bear_score').map(([k, v]) => `
             <div class="breakdown-item">
               <span class="label">${k.replace(/_/g, ' ')}</span>
               <span>${v}</span>
@@ -476,6 +488,22 @@ function render(d) {
           const [ticker, ...reason] = k.split(': ');
           return `<div class="kill-item"><span class="kill-ticker">${ticker}</span> ${reason.join(': ')}</div>`;
         }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Performance tracker section
+  if (d.performance && d.performance.scored > 0) {
+    const p = d.performance;
+    const wrColor = parseFloat(p.win_rate) >= 60 ? 'var(--green)' : parseFloat(p.win_rate) >= 40 ? 'var(--yellow)' : 'var(--red)';
+    html += `
+    <div class="section" style="margin-top:30px;">
+      <div class="section-title">PERFORMANCE TRACKER</div>
+      <div class="macro-cards">
+        <div class="card"><div class="label">WIN RATE</div><div class="value" style="color:${wrColor}">${p.win_rate}</div></div>
+        <div class="card"><div class="label">AVG RETURN</div><div class="value">${p.avg_return}</div></div>
+        <div class="card"><div class="label">W / L</div><div class="value"><span style="color:var(--green)">${p.wins}</span> / <span style="color:var(--red)">${p.losses}</span></div></div>
+        <div class="card"><div class="label">TOTAL / PENDING</div><div class="value">${p.total_recommendations} / ${p.pending}</div></div>
       </div>
     </div>`;
   }
