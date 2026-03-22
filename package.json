@@ -1,0 +1,20 @@
+{
+  "name": "options-matrix-scanner",
+  "version": "1.0.0",
+  "description": "15-Point Hamza Matrix options trading scanner. Uses Yahoo Finance data exclusively — no external AI APIs.",
+  "main": "scanner.js",
+  "bin": {
+    "options-scan": "./scanner.js"
+  },
+  "scripts": {
+    "scan": "node scanner.js",
+    "scan:verbose": "node scanner.js --verbose",
+    "scan:save": "node scanner.js -o results.json"
+  },
+  "keywords": ["options", "trading", "scanner", "yahoo-finance", "earnings"],
+  "author": "Hamza Nouman",
+  "license": "MIT",
+  "dependencies": {
+    "yahoo-finance2": "^3.13.2"
+  }
+}
