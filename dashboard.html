@@ -276,10 +276,10 @@ async function loadResults() {
   try {
     // Try local server first, then fall back to static file (GitHub Pages)
     let res;
-    try {
+    const isGitHubPages = window.location.hostname.endsWith('.github.io');
+    if (!isGitHubPages) {
       res = await fetch('/api/results');
-      if (!res.ok) throw new Error('not local');
-    } catch {
+    } else {
       const base = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
       res = await fetch(base + '/results.json');
     }
