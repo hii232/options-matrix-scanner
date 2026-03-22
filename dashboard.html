@@ -260,7 +260,7 @@
 
 <div class="header">
   <h1>OPTIONS MATRIX SCANNER</h1>
-  <div class="sub">15-Point Hamza Matrix &mdash; Yahoo Finance Data &mdash; Pure Math, No AI</div>
+  <div class="sub">15-Point Hamza Matrix &mdash; Yahoo Finance + Claude AI</div>
   <div class="scan-info" id="scanInfo"></div>
   <div style="margin-top: 16px;">
     <button class="btn" id="scanBtn" onclick="triggerScan()">Run New Scan</button>
@@ -300,6 +300,7 @@ function render(d) {
     <span class="badge ${vixClass}">VIX ${d.vix} &mdash; ${d.vix_gate}</span>
     <span class="badge badge-purple">${d.candidates_scanned} Candidates</span>
     <span class="badge badge-cyan">${d.survivors?.length || 0} Survivors</span>
+    ${d.ai_enabled ? '<span class="badge badge-purple">AI ENABLED</span>' : '<span class="badge badge-yellow">MATH ONLY</span>'}
   `;
 
   let html = '';
@@ -326,6 +327,14 @@ function render(d) {
       <div class="detail">out of ${d.candidates_scanned} scanned</div>
     </div>
   </div>`;
+
+  // Market Brief (AI)
+  if (d.market_brief) {
+    html += `<div class="card" style="margin-bottom:30px;border-left:3px solid var(--purple);">
+      <h3 style="color:var(--purple)">AI Market Brief</h3>
+      <p style="line-height:1.7;font-size:13px;">${d.market_brief}</p>
+    </div>`;
+  }
 
   // Top trade
   if (d.survivors?.length > 0) {
@@ -376,6 +385,37 @@ function render(d) {
       </div>
     </div>
 
+    <!-- AI Analysis -->
+    ${s.ai ? `
+    <div class="section">
+      <div class="section-title" style="color:var(--purple)">AI Analysis (Tier 3)</div>
+      <div class="card" style="border-left:3px solid var(--purple);">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+          <span class="badge ${s.ai.sentiment > 30 ? 'badge-green' : s.ai.sentiment > 0 ? 'badge-cyan' : s.ai.sentiment > -30 ? 'badge-yellow' : 'badge-red'}">
+            Sentiment: ${s.ai.sentiment > 0 ? '+' : ''}${s.ai.sentiment}
+          </span>
+          <span class="badge ${s.ai.verdict === 'STRONG BUY' ? 'badge-green' : s.ai.verdict === 'BUY' ? 'badge-cyan' : s.ai.verdict === 'HOLD' ? 'badge-yellow' : 'badge-red'}">
+            ${s.ai.verdict}
+          </span>
+          <span class="badge ${s.ai.confidence_adj > 0 ? 'badge-green' : s.ai.confidence_adj < 0 ? 'badge-red' : 'badge-yellow'}">
+            Confidence ${s.ai.confidence_adj > 0 ? '+' : ''}${s.ai.confidence_adj} pts
+          </span>
+        </div>
+        <div class="breakdown-list">
+          <div class="breakdown-item"><span class="label">Competitor Signal</span><span>${s.ai.competitor_signal || 'N/A'}</span></div>
+          <div class="breakdown-item"><span class="label">Macro Impact</span><span>${s.ai.macro_impact || 'N/A'}</span></div>
+          <div class="breakdown-item"><span class="label">Biggest Risk</span><span style="color:var(--red)">${s.ai.biggest_risk || 'N/A'}</span></div>
+          <div class="breakdown-item"><span class="label">Biggest Catalyst</span><span style="color:var(--green)">${s.ai.biggest_catalyst || 'N/A'}</span></div>
+        </div>
+        ${s.ai.news_factors?.length ? `
+        <div style="margin-top:12px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;">News Factors</div>
+          <ul class="risks" style="list-style:none;">${s.ai.news_factors.map(n => '<li style="color:var(--cyan);">' + n + '</li>').join('')}</ul>
+        </div>` : ''}
+      </div>
+    </div>
+    ` : ''}
+
     <!-- Tier Details -->
     <div class="grid">
       <div class="card">
@@ -409,7 +449,7 @@ function render(d) {
     <!-- Thesis -->
     <div class="section">
       <div class="section-title">Full Thesis</div>
-      <div class="thesis">${d.top_trade_full_thesis || s.thesis_summary}</div>
+      <div class="thesis">${s.ai?.thesis || d.top_trade_full_thesis || s.thesis_summary}</div>
     </div>
     `;
   } else {

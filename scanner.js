@@ -13,9 +13,11 @@
  */
 
 const fs = require("fs");
+require("dotenv").config({ override: true });
 const { KILL_LIST, ACCOUNT, TIER1, RULES, SCAN_UNIVERSE } = require("./config");
 const df = require("./data-fetcher");
 const matrix = require("./matrix");
+const ai = require("./ai-layer");
 
 function log(msg) { console.error(`[SCAN] ${msg}`); }
 
@@ -201,13 +203,67 @@ async function runFullScan(verbose = false) {
     }
   }
 
-  // Step 4: Select top trade
-  log(`\n[4/4] Selecting top trade from ${survivors.length} survivors...`);
+  // Step 4: AI Analysis (Tier 3)
+  let marketBrief = null;
+  if (ai.isAvailable()) {
+    log(`\n[4/5] Running AI analysis on ${survivors.length} survivors...`);
+    for (const s of survivors) {
+      try {
+        log(`  AI analyzing ${s.ticker}...`);
+        const aiResult = await ai.analyzeCandidate(s, macro);
+        s.aiAnalysis = aiResult;
 
-  const output = buildOutput(scanDate, effectiveVix, vixGate, macro, tier1Kills, survivors);
+        if (aiResult.analysis) {
+          const a = aiResult.analysis;
+          // Adjust confidence based on AI
+          const oldConf = s.confidence;
+          s.confidence = Math.max(0, Math.min(100, s.confidence + (a.confidence_adjustment || 0)));
+          s.direction = s.confidence >= RULES.minConfidence ? "CALL" : "NONE";
+          s.confidenceTradeable = s.confidence >= RULES.minConfidence;
+
+          // AI kill override
+          if (a.kill_override) {
+            s.status = "ai_killed";
+            s.killReason = `AI override: ${a.biggest_risk}`;
+            log(`  ${s.ticker}: AI KILLED — ${a.biggest_risk}`);
+          } else {
+            log(`  ${s.ticker}: AI confidence ${oldConf}% → ${s.confidence}% | Verdict: ${a.final_verdict}`);
+          }
+        }
+      } catch (e) {
+        log(`  ${s.ticker}: AI analysis failed — ${e.message}`);
+        s.aiAnalysis = { available: false, error: e.message };
+      }
+    }
+
+    // Generate market brief
+    try {
+      log("  Generating market brief...");
+      marketBrief = await ai.generateMarketBrief(macro, survivors, tier1Kills);
+    } catch (e) {
+      log(`  Market brief failed: ${e.message}`);
+    }
+
+    // Remove AI-killed survivors
+    const aiKilled = survivors.filter(s => s.status === "ai_killed");
+    for (const k of aiKilled) {
+      tier1Kills.push(`${k.ticker}: AI override — ${k.killReason}`);
+    }
+    const liveSurvivors = survivors.filter(s => s.status !== "ai_killed" && s.confidenceTradeable);
+    survivors.length = 0;
+    survivors.push(...liveSurvivors);
+  } else {
+    log("\n[4/5] AI layer: No API key — running math-only mode");
+  }
+
+  // Step 5: Select top trade
+  log(`\n[5/5] Selecting top trade from ${survivors.length} survivors...`);
+
+  const output = buildOutput(scanDate, effectiveVix, vixGate, macro, tier1Kills, survivors, null, marketBrief);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   log(`\nScan complete in ${elapsed}s`);
+  log(`AI mode: ${ai.isAvailable() ? "ENABLED" : "DISABLED (math-only)"}`);
   log(`Candidates scanned: ${candidates.length}`);
   log(`Tier 1 kills: ${tier1Kills.length}`);
   log(`Survivors: ${survivors.length}`);
@@ -222,7 +278,7 @@ async function runFullScan(verbose = false) {
   return output;
 }
 
-function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTradeReason = null) {
+function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTradeReason = null, marketBrief = null) {
   // Sort by confidence then tier2 score
   survivors.sort((a, b) => {
     if (b.confidence !== a.confidence) return b.confidence - a.confidence;
@@ -280,6 +336,17 @@ function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTra
         Object.entries(tier2.details || {}).map(([k, v]) => [k, v.detail || ""])
       ),
       risk_factors: buildRisks(s),
+      ai: s.aiAnalysis?.analysis ? {
+        sentiment: s.aiAnalysis.analysis.sentiment_score,
+        verdict: s.aiAnalysis.analysis.final_verdict,
+        confidence_adj: s.aiAnalysis.analysis.confidence_adjustment,
+        news_factors: s.aiAnalysis.analysis.news_factors,
+        competitor_signal: s.aiAnalysis.analysis.competitor_signal,
+        macro_impact: s.aiAnalysis.analysis.macro_impact,
+        biggest_risk: s.aiAnalysis.analysis.biggest_risk,
+        biggest_catalyst: s.aiAnalysis.analysis.biggest_catalyst,
+        thesis: s.aiAnalysis.analysis.ai_thesis,
+      } : null,
     };
   });
 
@@ -296,6 +363,10 @@ function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTra
       `Suggested: Buy ${ACCOUNT.contracts}x ${t.suggested_strike} ${t.direction}s ` +
       `expiring ${t.suggested_expiry} at ${t.estimated_premium_per_contract}/contract. ` +
       `Total cost: ${t.total_cost}. Entry: ${t.entry_window}. Stop: -40%.`;
+    // Use AI thesis if available
+    if (formatted[0].ai?.thesis) {
+      topThesis = formatted[0].ai.thesis;
+    }
   }
 
   if (!topTrade && !noTradeReason) {
@@ -306,6 +377,8 @@ function buildOutput(scanDate, vix, vixGate, macro, tier1Kills, survivors, noTra
     scan_date: scanDate,
     vix,
     vix_gate: vixGate,
+    ai_enabled: ai.isAvailable(),
+    market_brief: marketBrief,
     macro_context: {
       fed_posture: "Check CME FedWatch for latest",
       oil_brent: `$${macro.oilBrent ?? "N/A"}`,

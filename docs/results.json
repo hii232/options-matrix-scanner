@@ -1,7 +1,9 @@
 {
-  "scan_date": "2026-03-22 20:59:00",
+  "scan_date": "2026-03-22 21:25:57",
   "vix": 26.78,
   "vix_gate": "CAUTION",
+  "ai_enabled": true,
+  "market_brief": "**PRE-MARKET BRIEF | 2026-03-22**\n\nVIX at 26.78 signals elevated vol regime—expect wider bid-ask spreads and gamma spikes on tactical moves; 10Y at 439bps with a stronger dollar (DXY 99.5) is creating headwinds for tech multiple expansion, reinforcing today's sector rotation bias away from mega-cap growth. DDOG's 54% confidence pass on beat_run and avg_move metrics is a narrow survivor in a crowded field of tech failures—the broader scan suggests earnings quality bar is rising while forward guidance is being heavily scrutinized, particularly on consistency scores. Oil at $106.41 keeps energy volatility supported, but the real caution flag is the wholesale rejection of large-cap semis (QCOM, TXN, LRCX all sub-25% beat_run) and fintech (PYPL 0%)—this is not a broad-based earnings beat narrative, it's sector-specific pain. Trade defensively: target mean-reversion plays in oversold names rather than chasing beaten-down mega-caps; monitor Nasdaq gamma levels into any intraday reversals, and be aware that vol compression won't happen until we see clearer earnings visibility or a meaningful DXY pullback.",
   "macro_context": {
     "fed_posture": "Check CME FedWatch for latest",
     "oil_brent": "$106.41",
@@ -42,80 +44,8 @@
     "BMY: Fails Tier 1 on beat_run: 2/4 (50%) — below 63% threshold",
     "BIIB: Fails Tier 1 on avg_move: Avg 5.6% — below 8% threshold"
   ],
-  "survivors": [
-    {
-      "ticker": "DDOG",
-      "company": "Datadog, Inc.",
-      "sector": "Technology",
-      "market_cap": "$44.3B",
-      "current_price": "$125.08",
-      "earnings_date": "2026-05-05",
-      "earnings_timing": "BMO",
-      "days_to_earnings": 44,
-      "tier1_pass": true,
-      "tier2_score": 6,
-      "tier2_fails": [
-        "iv_rank",
-        "peg",
-        "inst_own"
-      ],
-      "direction": "CALL",
-      "direction_confidence": 66,
-      "confidence_breakdown": {
-        "beat_run_history": "3/4 — +15 points",
-        "iv_environment": "IV Rank 63% — expensive, -5",
-        "analyst_consensus": "strong_buy (43 analysts) — +8",
-        "flow_signal": "Uncrowded — +5",
-        "macro_alignment": "Technology — tailwind +5",
-        "catalyst_clarity": "Earnings in 44 days — acceptable +3",
-        "dump_risk": "high — -15 points"
-      },
-      "score": 6,
-      "avg_move": "12.0%",
-      "beat_run_rate": "3/4",
-      "iv_rank_est": "62.9%",
-      "peg": "N/A",
-      "analyst_targets": "avg $182, range $121-$260, 43 analysts, strong_buy",
-      "insider_activity": "neutral",
-      "recent_news": "Run scan with --verbose for details",
-      "suggested_strike": "$135",
-      "suggested_expiry": "2026-07-17",
-      "contracts": 2,
-      "estimated_premium_per_contract": "$12.22",
-      "total_cost": "$2445.00",
-      "fx_adjusted_target": "$2518.35",
-      "entry_window": "10:00 AM - 3:00 PM ET",
-      "exit_rule": "Sell HALF on earnings pop. Hold HALF for trend continuation.",
-      "stop_loss": "-40% on premium paid",
-      "thesis_summary": "Datadog, Inc. reports earnings 2026-05-05 (BMO). Strong beat-and-run history with favorable IV setup. Sector: Technology. Analyst: strong_buy.",
-      "tier1_details": {
-        "beat_run": "3/4 (75%) — PASS",
-        "avg_move": "12.0% — PASS",
-        "spread_ok": "$1.45 — PASS",
-        "price_ok": "$125.08 — PASS",
-        "vix_ok": "26.78 — PASS (caution)",
-        "fx_ok": "6.6% post-FX — PASS"
-      },
-      "tier2_details": {
-        "iv_rank": "63% — FAIL",
-        "bmo": "BMO — PASS",
-        "peg": "N/A — FAIL",
-        "de_ratio": "34% — PASS",
-        "inst_own": "91.1% — FAIL",
-        "flow": "Vol/OI 0.10 — uncrowded PASS",
-        "recession_proof": "Technology — PASS",
-        "insider": "neutral — PASS",
-        "revenue_trend": "accelerating — PASS"
-      },
-      "risk_factors": [
-        "Forward P/E 47.3 > 35",
-        "Max consensus Strong Buy — no fuel left",
-        "IV Rank 63% > 50% — expensive premium",
-        "High forward P/E: 47.3"
-      ]
-    }
-  ],
-  "top_trade": "DDOG",
-  "top_trade_full_thesis": "DDOG (Datadog, Inc.) is the highest-conviction trade. Direction: CALL with 66% confidence. Earnings on 2026-05-05 (BMO), 44 days out. Beat-run rate: 3/4. Average post-earnings move: 12.0%. IV Rank: 62.9%. Tier 2 score: 6/9. Suggested: Buy 2x $135 CALLs expiring 2026-07-17 at $12.22/contract. Total cost: $2445.00. Entry: 10:00 AM - 3:00 PM ET. Stop: -40%.",
-  "no_trade_reason": null
+  "survivors": [],
+  "top_trade": null,
+  "top_trade_full_thesis": null,
+  "no_trade_reason": "No candidates survived the full 15-point matrix with sufficient confidence"
 }

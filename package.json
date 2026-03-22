@@ -21,6 +21,8 @@
   "author": "Hamza Nouman",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "yahoo-finance2": "^3.13.2"
   }
