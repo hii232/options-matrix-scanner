@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Options Matrix Scanner</title>
 <style>
   :root {
@@ -280,8 +283,9 @@ async function loadResults() {
       res = await fetch('/api/results');
     } else {
       const base = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
-      res = await fetch(base + '/results.json');
+      res = await fetch(base + '/results.json?t=' + Date.now());
     }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (data.no_results || data.error) {
       renderNoResults(data.error || 'No scan results found.');
