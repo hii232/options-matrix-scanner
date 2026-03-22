@@ -36,14 +36,16 @@ function runTier1(stockInfo, postMoves, optionsData, vix) {
 }
 
 function t1BeatRunRate(postMoves) {
-  if (!postMoves?.length || postMoves.length < 4) {
-    return { passed: false, reason: "Insufficient earnings history (<4 quarters)",
+  if (!postMoves?.length || postMoves.length < 2) {
+    return { passed: false, reason: "Insufficient earnings history (<2 quarters)",
              detail: "0/0 (0%) — FAIL", value: "0/0" };
   }
   const total = Math.min(postMoves.length, 8);
   const beatAndRan = postMoves.slice(0, 8).filter((m) => m.beatAndRan).length;
   const rate = beatAndRan / total;
-  const passed = beatAndRan >= TIER1.beatRunMinCount && rate >= TIER1.beatRunRateMin;
+  // Scale min count to available data: require 63% of however many quarters we have
+  const scaledMinCount = Math.ceil(total * TIER1.beatRunRateMin);
+  const passed = beatAndRan >= scaledMinCount && rate >= TIER1.beatRunRateMin;
   return {
     passed,
     reason: `${beatAndRan}/${total} (${(rate * 100).toFixed(0)}%)${passed ? "" : " — below 63% threshold"}`,

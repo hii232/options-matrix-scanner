@@ -161,25 +161,44 @@ function getPostEarningsMoves(earningsHistory, priceHistory) {
   for (const q of earningsHistory) {
     if (!q.date) continue;
     try {
-      const ed = new Date(q.date);
-      // Find the closest trading day on/after earnings
-      const postIdx = priceHistory.findIndex(
-        (p) => new Date(p.date) >= ed
-      );
-      if (postIdx < 1 || postIdx >= priceHistory.length - 1) continue;
+      const quarterEnd = new Date(q.date);
+      // Earnings are typically reported 10-30 trading days after quarter end.
+      // Find the biggest single-day |move| in that window — that's the earnings day.
+      const windowStart = new Date(quarterEnd);
+      windowStart.setDate(windowStart.getDate() + 10);
+      const windowEnd = new Date(quarterEnd);
+      windowEnd.setDate(windowEnd.getDate() + 45);
 
-      const closeBefore = priceHistory[postIdx - 1].close;
-      const closeAfter = priceHistory[postIdx].close;
-      if (!closeBefore || !closeAfter) continue;
+      let biggestMove = 0;
+      let biggestMovePct = 0;
+      let earningsDay = null;
 
-      const movePct = ((closeAfter - closeBefore) / closeBefore) * 100;
+      for (let i = 1; i < priceHistory.length; i++) {
+        const day = new Date(priceHistory[i].date);
+        if (day < windowStart || day > windowEnd) continue;
+
+        const prev = priceHistory[i - 1].close;
+        const curr = priceHistory[i].close;
+        if (!prev || !curr) continue;
+
+        const pct = ((curr - prev) / prev) * 100;
+        if (Math.abs(pct) > Math.abs(biggestMove)) {
+          biggestMove = pct;
+          biggestMovePct = pct;
+          earningsDay = day;
+        }
+      }
+
+      if (earningsDay === null) continue;
+
       const beat = (q.surprisePct || 0) > 0;
-      const ran = movePct > 2.0;
+      const ran = biggestMovePct > 2.0;
 
       results.push({
         date: q.date,
-        movePct: +movePct.toFixed(2),
-        absMovePct: +Math.abs(movePct).toFixed(2),
+        earningsDay: earningsDay.toISOString().split("T")[0],
+        movePct: +biggestMovePct.toFixed(2),
+        absMovePct: +Math.abs(biggestMovePct).toFixed(2),
         beat,
         ran,
         beatAndRan: beat && ran,
