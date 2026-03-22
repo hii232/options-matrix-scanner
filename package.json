@@ -11,10 +11,17 @@
     "scan:verbose": "node scanner.js --verbose",
     "scan:save": "node scanner.js -o results.json"
   },
-  "keywords": ["options", "trading", "scanner", "yahoo-finance", "earnings"],
+  "keywords": [
+    "options",
+    "trading",
+    "scanner",
+    "yahoo-finance",
+    "earnings"
+  ],
   "author": "Hamza Nouman",
   "license": "MIT",
   "dependencies": {
+    "express": "^5.2.1",
     "yahoo-finance2": "^3.13.2"
   }
 }

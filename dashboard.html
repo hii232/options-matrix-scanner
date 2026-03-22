@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Options Matrix Scanner</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --card: #111827;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #6b7280;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --blue: #3b82f6;
+    --cyan: #06b6d4;
+    --purple: #8b5cf6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    text-align: center;
+    padding: 30px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 30px;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  .header .sub {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .scan-info {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 15px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+  .badge-purple { background: rgba(139,92,246,0.15); color: var(--purple); border: 1px solid rgba(139,92,246,0.3); }
+  .badge-cyan { background: rgba(6,182,212,0.15); color: var(--cyan); border: 1px solid rgba(6,182,212,0.3); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 30px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .card h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .card .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .card .detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .section { margin-bottom: 30px; }
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .top-trade {
+    background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.08));
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+  }
+  .top-trade h2 {
+    font-size: 22px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .top-trade .ticker {
+    color: var(--green);
+    font-size: 32px;
+    font-weight: 800;
+  }
+  .top-trade .company { color: var(--muted); font-size: 14px; }
+  .trade-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .trade-item label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .trade-item span {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .thesis {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 16px;
+    line-height: 1.6;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .tier-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .tier-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tier-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pass { color: var(--green); }
+  .fail { color: var(--red); }
+
+  .kills-list {
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  .kill-item {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--muted);
+  }
+  .kill-item .kill-ticker {
+    color: var(--red);
+    font-weight: 700;
+    min-width: 60px;
+    display: inline-block;
+  }
+
+  .risks li {
+    padding: 4px 0;
+    color: var(--yellow);
+    font-size: 13px;
+    list-style: none;
+  }
+  .risks li::before { content: "! "; font-weight: 700; }
+
+  .confidence-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .confidence-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s;
+  }
+
+  .breakdown-list { font-size: 12px; margin-top: 10px; }
+  .breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .breakdown-item .label { color: var(--muted); }
+
+  .btn {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .no-results {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+  }
+  .no-results h2 { font-size: 20px; margin-bottom: 12px; color: var(--text); }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    .top-trade .ticker { font-size: 24px; }
+    .trade-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>OPTIONS MATRIX SCANNER</h1>
+  <div class="sub">15-Point Hamza Matrix &mdash; Yahoo Finance Data &mdash; Pure Math, No AI</div>
+  <div class="scan-info" id="scanInfo"></div>
+  <div style="margin-top: 16px;">
+    <button class="btn" id="scanBtn" onclick="triggerScan()">Run New Scan</button>
+  </div>
+</div>
+
+<div id="content">
+  <div class="loading pulse">Loading results...</div>
+</div>
+
+<script>
+async function loadResults() {
+  try {
+    // Try local server first, then fall back to static file (GitHub Pages)
+    let res;
+    try {
+      res = await fetch('/api/results');
+    } catch {
+      res = await fetch('results.json');
+    }
+    const data = await res.json();
+    if (data.no_results || data.error) {
+      renderNoResults(data.error || 'No scan results found.');
+      return;
+    }
+    render(data);
+  } catch (e) {
+    renderNoResults('Failed to load results: ' + e.message);
+  }
+}
+
+function render(d) {
+  // Scan info badges
+  const vixClass = d.vix_gate === 'OPEN' ? 'badge-green' : d.vix_gate === 'CAUTION' ? 'badge-yellow' : 'badge-red';
+  document.getElementById('scanInfo').innerHTML = `
+    <span class="badge badge-blue">Scanned ${d.scan_date}</span>
+    <span class="badge ${vixClass}">VIX ${d.vix} &mdash; ${d.vix_gate}</span>
+    <span class="badge badge-purple">${d.candidates_scanned} Candidates</span>
+    <span class="badge badge-cyan">${d.survivors?.length || 0} Survivors</span>
+  `;
+
+  let html = '';
+
+  // Macro cards
+  const m = d.macro_context || {};
+  html += `<div class="grid">
+    <div class="card">
+      <h3>VIX Level</h3>
+      <div class="value" style="color:${d.vix < 25 ? 'var(--green)' : d.vix < 30 ? 'var(--yellow)' : 'var(--red)'}">${d.vix}</div>
+      <div class="detail">Gate: ${d.vix_gate}</div>
+    </div>
+    <div class="card">
+      <h3>10-Year Yield</h3>
+      <div class="value">${m.ten_year_yield || 'N/A'}</div>
+    </div>
+    <div class="card">
+      <h3>Brent Oil</h3>
+      <div class="value">${m.oil_brent || 'N/A'}</div>
+    </div>
+    <div class="card">
+      <h3>Tier 1 Kills</h3>
+      <div class="value" style="color:var(--red)">${d.tier1_kills?.length || 0}</div>
+      <div class="detail">out of ${d.candidates_scanned} scanned</div>
+    </div>
+  </div>`;
+
+  // Top trade
+  if (d.survivors?.length > 0) {
+    const s = d.survivors[0];
+    const confColor = s.direction_confidence >= 80 ? 'var(--green)' : s.direction_confidence >= 65 ? 'var(--cyan)' : 'var(--yellow)';
+    html += `
+    <div class="top-trade">
+      <h2>
+        <span class="ticker">${s.ticker}</span>
+        <span class="badge badge-green">${s.direction}</span>
+        <span class="badge" style="background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3)">${s.direction_confidence}% Confidence</span>
+      </h2>
+      <div class="company">${s.company} &mdash; ${s.sector} &mdash; ${s.market_cap}</div>
+
+      <div class="trade-grid">
+        <div class="trade-item"><label>Price</label><span>${s.current_price}</span></div>
+        <div class="trade-item"><label>Earnings</label><span>${s.earnings_date} (${s.earnings_timing})</span></div>
+        <div class="trade-item"><label>Days Out</label><span>${s.days_to_earnings}</span></div>
+        <div class="trade-item"><label>Strike</label><span>${s.suggested_strike}</span></div>
+        <div class="trade-item"><label>Expiry</label><span>${s.suggested_expiry}</span></div>
+        <div class="trade-item"><label>Contracts</label><span>${s.contracts}x OTM</span></div>
+        <div class="trade-item"><label>Premium</label><span>${s.estimated_premium_per_contract}/ea</span></div>
+        <div class="trade-item"><label>Total Cost</label><span>${s.total_cost}</span></div>
+        <div class="trade-item"><label>FX-Adjusted</label><span>${s.fx_adjusted_target}</span></div>
+        <div class="trade-item"><label>Beat-Run</label><span>${s.beat_run_rate}</span></div>
+        <div class="trade-item"><label>Avg Move</label><span>${s.avg_move}</span></div>
+        <div class="trade-item"><label>IV Rank</label><span>${s.iv_rank_est}</span></div>
+        <div class="trade-item"><label>Stop Loss</label><span>${s.stop_loss}</span></div>
+        <div class="trade-item"><label>Entry Window</label><span>${s.entry_window}</span></div>
+        <div class="trade-item"><label>Analysts</label><span>${s.analyst_targets}</span></div>
+      </div>
+
+      <div class="confidence-bar"><div class="confidence-fill" style="width:${s.direction_confidence}%;background:${confColor}"></div></div>
+    </div>
+
+    <!-- Confidence Breakdown -->
+    <div class="section">
+      <div class="section-title">Confidence Breakdown</div>
+      <div class="card">
+        <div class="breakdown-list">
+          ${Object.entries(s.confidence_breakdown || {}).map(([k, v]) => `
+            <div class="breakdown-item">
+              <span class="label">${k.replace(/_/g, ' ')}</span>
+              <span>${v}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Tier Details -->
+    <div class="grid">
+      <div class="card">
+        <h3>Tier 1 &mdash; Kill Criteria</h3>
+        <table class="tier-table">
+          <tr><th>Check</th><th>Result</th></tr>
+          ${Object.entries(s.tier1_details || {}).map(([k, v]) => `
+            <tr><td>${k.replace(/_/g, ' ')}</td><td class="${v.includes('PASS') ? 'pass' : 'fail'}">${v}</td></tr>
+          `).join('')}
+        </table>
+      </div>
+      <div class="card">
+        <h3>Tier 2 &mdash; Scoring (${s.tier2_score}/9)</h3>
+        <table class="tier-table">
+          <tr><th>Check</th><th>Result</th></tr>
+          ${Object.entries(s.tier2_details || {}).map(([k, v]) => `
+            <tr><td>${k.replace(/_/g, ' ')}</td><td class="${v.includes('PASS') ? 'pass' : 'fail'}">${v}</td></tr>
+          `).join('')}
+        </table>
+      </div>
+    </div>
+
+    <!-- Risks -->
+    <div class="section">
+      <div class="section-title">Risk Factors</div>
+      <div class="card">
+        <ul class="risks">${(s.risk_factors || []).map(r => `<li>${r}</li>`).join('')}</ul>
+      </div>
+    </div>
+
+    <!-- Thesis -->
+    <div class="section">
+      <div class="section-title">Full Thesis</div>
+      <div class="thesis">${d.top_trade_full_thesis || s.thesis_summary}</div>
+    </div>
+    `;
+  } else {
+    html += `
+    <div class="no-results" style="background:var(--card);border-radius:12px;border:1px solid var(--border);">
+      <h2 style="color:var(--red);">NO QUALIFYING TRADE FOUND</h2>
+      <p>${d.no_trade_reason || 'No candidates survived the 15-point matrix.'}</p>
+      <p style="margin-top:12px;font-size:12px;">The matrix is protecting your capital. This is working as designed.</p>
+    </div>`;
+  }
+
+  // Tier 1 kills
+  if (d.tier1_kills?.length) {
+    html += `
+    <div class="section" style="margin-top:30px;">
+      <div class="section-title">Tier 1 Kills (${d.tier1_kills.length})</div>
+      <div class="card kills-list">
+        ${d.tier1_kills.map(k => {
+          const [ticker, ...reason] = k.split(': ');
+          return `<div class="kill-item"><span class="kill-ticker">${ticker}</span> ${reason.join(': ')}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderNoResults(msg) {
+  document.getElementById('content').innerHTML = `
+    <div class="no-results">
+      <h2>No Results Yet</h2>
+      <p>${msg}</p>
+      <p style="margin-top:16px;"><button class="btn" onclick="triggerScan()">Run First Scan</button></p>
+    </div>`;
+}
+
+async function triggerScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning... (~90s)';
+  try {
+    await fetch('/api/scan');
+    // Poll for completion
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) { clearInterval(poll); btn.disabled = false; btn.textContent = 'Run New Scan'; return; }
+      try {
+        const res = await fetch('/api/results');
+        const data = await res.json();
+        if (data.scan_date && !data.no_results) {
+          clearInterval(poll);
+          btn.disabled = false;
+          btn.textContent = 'Run New Scan';
+          render(data);
+        }
+      } catch {}
+    }, 5000);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Run New Scan';
+    alert('Scan failed: ' + e.message);
+  }
+}
+
+loadResults();
+</script>
+</body>
+</html>

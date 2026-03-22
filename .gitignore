@@ -3,5 +3,7 @@ node_modules/
 *.json
 !package.json
 !package-lock.json
+!docs/results.json
+!.claude/launch.json
 output/
 .DS_Store
